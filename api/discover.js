@@ -7,15 +7,25 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { theme } = req.body || {};
-  if (!theme || typeof theme !== 'string' || !theme.trim()) {
-    return res.status(400).json({ error: 'theme is required' });
-  }
+  const { theme, params = {} } = req.body || {};
+  if (!theme?.trim()) return res.status(400).json({ error: 'theme is required' });
 
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'OPENAI_API_KEY is not configured on the server.' });
-  }
+  if (!apiKey) return res.status(500).json({ error: 'OPENAI_API_KEY not configured' });
+
+  const {
+    maxHoldings = 12,
+    geography = 'all',
+    weightingApproach = 'equal',
+    rebalancingFreq = 'quarterly',
+  } = params;
+
+  const geoInstruction = {
+    'all': 'Include companies from any exchange globally.',
+    'us-only': 'Include ONLY US-listed companies (NYSE, NASDAQ, NYSE American, NYSE Arca). No ADRs.',
+    'exclude-china': 'Exclude any company primarily listed on Chinese exchanges (Shanghai, Shenzhen, HKEX). US-listed ADRs of Chinese companies are also excluded.',
+    'developed-only': 'Include only companies listed on developed-market exchanges: US, Canada, UK, Europe, Japan, South Korea, Australia. No emerging markets.',
+  }[geography] || 'Include companies from any exchange globally.';
 
   const openai = new OpenAI({ apiKey });
 
@@ -23,37 +33,65 @@ export default async function handler(req, res) {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       temperature: 0.2,
-      max_tokens: 3000,
+      max_tokens: 4000,
       messages: [
         {
           role: 'system',
-          content: `You are a senior equity analyst specializing in thematic ETF construction at a major asset manager.\n\nGiven an investment theme, identify 10–15 publicly traded companies with meaningful exposure to that theme.\n\nReturn ONLY a valid JSON array — no markdown, no code fences, no extra text. Each element:\n{\n  "ticker": "NVDA",\n  "name": "NVIDIA Corporation",\n  "exchange": "NASDAQ",\n  "sector": "Information Technology",\n  "industry": "Semiconductors",\n  "exposure": "core",\n  "rationale": "1-2 sentence explanation of direct revenue exposure to the theme",\n  "marketCapBn": 2500\n}\n\nStrict rules:\n- Only US-listed equities (NYSE, NASDAQ, NYSE American, NYSE Arca)\n- "exposure": "core" means the theme is central to their business model; "secondary" means meaningful but not primary\n- marketCapBn: realistic approximate market cap in billions USD\n- Mix large-cap leaders with mid/small-cap pure-plays — don't just pick mega caps\n- Prioritize companies with direct, quantifiable revenue from the theme\n- Verify tickers are correct for the primary US listing`
+          content: `You are a senior equity analyst at a thematic ETF asset manager.
+
+Given an investment theme, identify exactly ${maxHoldings} publicly traded companies with meaningful exposure.
+
+${geoInstruction}
+
+Return ONLY a valid JSON array — no markdown, no code fences. Each element:
+{
+  "ticker": "NVDA",
+  "name": "NVIDIA Corporation",
+  "exchange": "NASDAQ",
+  "sector": "Information Technology",
+  "industry": "Semiconductors",
+  "exposure": "core",
+  "exposureScore": 9,
+  "rationale": "2-3 sentence explanation of the company's direct thematic exposure and revenue contribution",
+  "marketCapBn": 2500,
+  "revenueFromThemePct": 80
+}
+
+exposureScore (1–10):
+- 10: Pure-play — essentially all revenue is from the theme
+- 8–9: Core — majority of revenue or strategic focus on the theme
+- 6–7: Significant — meaningful revenue exposure but diversified
+- 4–5: Secondary — indirect or partial exposure
+- 1–3: Peripheral — loosely related
+
+exposure field: "core" if exposureScore ≥ 6, else "secondary"
+revenueFromThemePct: estimated % of revenue from the theme (your best estimate)
+
+Prioritize: high exposureScore names first. Mix large-cap anchors with mid/small-cap pure-plays.
+Verify all tickers are correct for the primary listing.`
         },
         {
           role: 'user',
-          content: `Investment theme: "${theme.trim()}"\n\nFind 10–15 publicly traded US companies with meaningful exposure to this theme.`
+          content: `Investment theme: "${theme.trim()}"\n\nFind exactly ${maxHoldings} companies. Geography rule: ${geoInstruction}`
         }
       ],
     });
 
     const raw = completion.choices[0].message.content.trim();
-    // Strip any accidental markdown fences
     const cleaned = raw.replace(/^```json\s*/m, '').replace(/^```\s*/m, '').replace(/```\s*$/m, '').trim();
 
-    let companies;
-    const parsed = JSON.parse(cleaned);
-    if (Array.isArray(parsed)) {
-      companies = parsed;
-    } else if (parsed.companies && Array.isArray(parsed.companies)) {
-      companies = parsed.companies;
-    } else {
-      const arr = Object.values(parsed).find(v => Array.isArray(v));
+    let companies = JSON.parse(cleaned);
+    if (!Array.isArray(companies)) {
+      const arr = Object.values(companies).find(v => Array.isArray(v));
       companies = arr || [];
     }
 
-    if (!companies.length) {
-      return res.status(500).json({ error: 'AI returned no companies. Try a more specific theme.' });
-    }
+    // Ensure exposureScore exists
+    companies = companies.map(c => ({
+      ...c,
+      exposureScore: c.exposureScore ?? (c.exposure === 'core' ? 7 : 5),
+      revenueFromThemePct: c.revenueFromThemePct ?? null,
+    }));
 
     return res.status(200).json({ companies, theme: theme.trim() });
   } catch (err) {

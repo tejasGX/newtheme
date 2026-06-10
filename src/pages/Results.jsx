@@ -1,11 +1,13 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import axios from 'axios'
 import {
   LineChart, Line, AreaChart, Area,
   PieChart, Pie, Cell,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
-import { TrendingUp, TrendingDown, Download, RotateCcw, ArrowUpRight } from 'lucide-react'
+import { TrendingUp, TrendingDown, Download, RotateCcw, ArrowUpRight, Save, FileText, Loader2 } from 'lucide-react'
 import useStore from '../store/useStore'
 import clsx from 'clsx'
 
@@ -89,7 +91,28 @@ function exportCsv(attribution, theme) {
 
 export default function Results() {
   const navigate = useNavigate()
-  const { results, theme, benchmark, setResults } = useStore()
+  const { results, theme, benchmark, setResults, selectedCompanies, discoveryParams, setCurrentReport } = useStore()
+  const [reportLoading, setReportLoading] = useState(false)
+  const [reportSaved, setReportSaved] = useState(false)
+  const [reportError, setReportError] = useState(null)
+
+  const handleGenerateReport = async () => {
+    setReportLoading(true); setReportError(null)
+    try {
+      const { data: reportData } = await axios.post('/api/generate-report', {
+        theme,
+        companies: selectedCompanies,
+        params: discoveryParams,
+      })
+      const { data: saved } = await axios.post('/api/reports', reportData)
+      setCurrentReport({ ...reportData, id: saved.id })
+      setReportSaved(true)
+    } catch (err) {
+      setReportError(err.response?.data?.error || 'Report generation failed')
+    } finally {
+      setReportLoading(false)
+    }
+  }
 
   if (!results) {
     return (
@@ -97,7 +120,7 @@ export default function Results() {
         <div className="text-center py-20 text-slate-400">
           <p className="text-lg font-medium">No results yet</p>
           <p className="text-sm mt-1 mb-6">Run a backtest to see results.</p>
-          <button onClick={() => navigate('/backtest')} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium text-sm">
+          <button onClick={() => navigate('/backtest')} className="px-5 py-2.5 text-white rounded-xl font-medium text-sm" style={{ background: '#0074D9' }}>
             Configure Backtest
           </button>
         </div>
@@ -121,7 +144,7 @@ export default function Results() {
             {' · '}{metrics.numHoldings} holdings
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => { setResults(null); navigate('/backtest') }}
             className="flex items-center gap-1.5 px-4 py-2.5 border border-slate-200 bg-white text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors"
@@ -134,8 +157,24 @@ export default function Results() {
           >
             <Download className="w-3.5 h-3.5" /> Export CSV
           </button>
+          <button
+            onClick={handleGenerateReport}
+            disabled={reportLoading || reportSaved}
+            className="flex items-center gap-1.5 px-4 py-2.5 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-60"
+            style={{ background: reportSaved ? '#22c55e' : '#0074D9' }}>
+            {reportLoading
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin"/>Generating...</>
+              : reportSaved
+              ? <><FileText className="w-3.5 h-3.5"/>Saved to Library</>
+              : <><Save className="w-3.5 h-3.5"/>Save Theme Report</>
+            }
+          </button>
         </div>
       </div>
+
+      {reportError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{reportError}</div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <MetricCard label="Total Return" value={pct(metrics.totalReturn)} positive={metrics.totalReturn >= 0}
