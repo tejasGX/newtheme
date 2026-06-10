@@ -116,7 +116,6 @@ export default function Basket() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Holdings table */}
         <div className="lg:col-span-3">
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -194,9 +193,7 @@ export default function Basket() {
           </div>
         </div>
 
-        {/* Controls + Chart */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Weighting controls */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
             <h2 className="font-semibold text-slate-900 text-sm mb-4">Weighting Method</h2>
             <div className="flex flex-col gap-2">
@@ -237,7 +234,6 @@ export default function Basket() {
             )}
           </div>
 
-          {/* Pie chart */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
             <h2 className="font-semibold text-slate-900 text-sm mb-3">Weight Distribution</h2>
             <ResponsiveContainer width="100%" height={220}>

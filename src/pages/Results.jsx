@@ -61,7 +61,6 @@ const CustomTooltipArea = ({ active, payload, label }) => {
   )
 }
 
-// Thin timeseries for chart performance
 function thinSeries(series, maxPoints = 300) {
   if (series.length <= maxPoints) return series
   const step = Math.ceil(series.length / maxPoints)
@@ -113,7 +112,6 @@ export default function Results() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 mb-1">Backtest Results</h1>
@@ -139,7 +137,6 @@ export default function Results() {
         </div>
       </div>
 
-      {/* Metrics strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <MetricCard label="Total Return" value={pct(metrics.totalReturn)} positive={metrics.totalReturn >= 0}
           sub={`Benchmark: ${pct(metrics.benchmarkTotalReturn)}`} />
@@ -153,7 +150,6 @@ export default function Results() {
           sub={`Benchmark: ${pct(metrics.benchmarkVol)}`} />
       </div>
 
-      {/* Cumulative return chart */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
         <SectionHeader>Cumulative Return (Indexed to 100)</SectionHeader>
         <ResponsiveContainer width="100%" height={280}>
@@ -169,7 +165,6 @@ export default function Results() {
         </ResponsiveContainer>
       </div>
 
-      {/* Drawdown + Sector row */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         <div className="lg:col-span-3 bg-white rounded-xl border border-slate-200 shadow-sm p-5">
           <SectionHeader>Drawdown</SectionHeader>
@@ -205,7 +200,6 @@ export default function Results() {
         </div>
       </div>
 
-      {/* Attribution table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <SectionHeader>Return Attribution</SectionHeader>
